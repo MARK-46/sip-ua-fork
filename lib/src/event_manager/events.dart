@@ -1,24 +1,58 @@
-/// each EventType class can implement this method and the EventManager will call it before
-/// delivering an event, thus ensuring good quality events with a fail early approach.
-abstract class EventType {
-  void sanityCheck() {}
+import 'dart:async';
+
+class EventEmitter {
+  final Map<String, StreamController<List<dynamic>>> _controllers = {};
+
+  void on(String event, Function listener) {
+    _getController(event).stream.listen((args) {
+      _callWithParameters(listener, args);
+    });
+  }
+
+  void once(String event, Function listener) {
+    late StreamSubscription subscription;
+    subscription = _getController(event).stream.listen((args) {
+      _callWithParameters(listener, args);
+      subscription.cancel();
+    });
+  }
+
+  void emit(String event, [List<dynamic> args = const []]) {
+    if (_controllers.containsKey(event)) {
+      _controllers[event]!.add(args);
+    }
+  }
+
+  void off(String? event) {
+    if (event == null) {
+      for (var controller in _controllers.values) {
+        controller.close();
+      }
+      _controllers.clear();
+    } else {
+      if (_controllers.containsKey(event)) {
+        _controllers[event]!.close();
+        _controllers.remove(event);
+      }
+    }
+  }
+
+  StreamController<List<dynamic>> _getController(String event) {
+    if (!_controllers.containsKey(event)) {
+      _controllers[event] = StreamController.broadcast();
+    }
+    return _controllers[event]!;
+  }
+
+  void _callWithParameters(Function function, List<dynamic> args) {
+    try {
+      Function.apply(function, args);
+    } catch (e) {
+      
+    }
+  }
 }
 
-/// All of the following Event classes are named exactly the same as the strings that the old code used
-/// except that they are all prefixed with Event. ie. "stateChanged" is EventStateChanged
-///
-/// You will see a lot of commented out fields, these fields are not referenced any where in the code.
-/// In a future update I'd suggest removing them and removing the parameters associated with them and
-/// thus remove a lot of unneeded code.
-///
-/// I've tried to infer types to help with future debugging, but unfortunately the types of "response"
-/// and "request" are many and share no common hierarchy so they have
-/// to remain dynamic in many places for now.
-///
-/// These changes will make it much easier to reason about where Events go to and come from, as well as
-/// exactly what fields are available without the need to actually run the code.
-
-/// A general error cause class.
 class ErrorCause {
   ErrorCause({this.status_code, this.cause, this.reason_phrase});
   @override

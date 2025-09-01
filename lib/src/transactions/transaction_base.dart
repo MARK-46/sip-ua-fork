@@ -1,7 +1,7 @@
+import '../transports/socket_interface.dart';
 import '../event_manager/event_manager.dart';
 import '../sip_message.dart';
-import '../socket_transport.dart';
-import '../ua.dart';
+import '../sip_client.dart';
 
 enum TransactionState {
   // Transaction states.
@@ -16,8 +16,8 @@ enum TransactionState {
 
 abstract class TransactionBase extends EventManager {
   String? id;
-  late UA ua;
-  SocketTransport? transport;
+  late SIP_Client client;
+  SIP_SocketInterface? transport;
   TransactionState? state;
   IncomingMessage? last_response;
   dynamic request;

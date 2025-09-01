@@ -1,18 +1,17 @@
 import 'dart:async';
 
+import '../transports/socket_interface.dart';
 import '../event_manager/internal_events.dart';
 import '../logger.dart';
 import '../sip_message.dart';
-import '../socket_transport.dart';
 import '../timers.dart';
-import '../ua.dart';
+import '../sip_client.dart';
 import 'transaction_base.dart';
 
 class InviteServerTransaction extends TransactionBase {
-  InviteServerTransaction(
-      UA ua, SocketTransport? transport, IncomingRequest request) {
+  InviteServerTransaction(SIP_Client client, SIP_SocketInterface? transport, IncomingRequest request) {
     id = request.via_branch;
-    this.ua = ua;
+    this.client = client;
     this.transport = transport;
     this.request = request;
     last_response = IncomingMessage();
@@ -20,7 +19,7 @@ class InviteServerTransaction extends TransactionBase {
 
     state = TransactionState.PROCEEDING;
 
-    ua.newTransaction(this);
+    client.transactions.addTransaction(this);
 
     _resendProvisionalTimer = null;
 
@@ -43,7 +42,7 @@ class InviteServerTransaction extends TransactionBase {
     }
 
     stateChanged(TransactionState.TERMINATED);
-    ua.destroyTransaction(this);
+    client.transactions.removeTransaction(this);
   }
 
   void timer_I() {
@@ -56,7 +55,7 @@ class InviteServerTransaction extends TransactionBase {
 
     if (state == TransactionState.ACCEPTED) {
       stateChanged(TransactionState.TERMINATED);
-      ua.destroyTransaction(this);
+      client.transactions.removeTransaction(this);
     }
   }
 
@@ -77,7 +76,7 @@ class InviteServerTransaction extends TransactionBase {
       clearTimeout(I);
 
       stateChanged(TransactionState.TERMINATED);
-      ua.destroyTransaction(this);
+      client.transactions.removeTransaction(this);
     }
   }
 

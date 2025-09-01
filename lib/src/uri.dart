@@ -10,13 +10,9 @@ import 'utils.dart';
  * -param {String} [port]
  * -param {Object} [parameters]
  * -param {Object} [headers]
- *
  */
 class URI {
-  URI(String? scheme, this.user, String? host,
-      [int? port,
-      Map<dynamic, dynamic>? parameters,
-      Map<dynamic, dynamic>? headers]) {
+  URI(String? scheme, this.user, String? host, [int? port, Map<dynamic, dynamic>? parameters, Map<dynamic, dynamic>? headers]) {
     // Checks.
     if (host == null) {
       throw AssertionError('missing or invalid "host" parameter');

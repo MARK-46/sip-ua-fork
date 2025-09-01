@@ -1,4 +1,5 @@
-const String USER_AGENT = 'dart-sip-ua v0.5.3';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'sip_session.dart';
 
 // SIP scheme.
 const String SIP = 'sip';
@@ -93,7 +94,7 @@ class CausesType {
   const UPDATE    = 'UPDATE';
   const SUBSCRIBE = 'SUBSCRIBE';
 */
-enum SipMethod {
+enum SIP_Method {
   ACK,
   BYE,
   CANCEL,
@@ -110,15 +111,15 @@ enum SipMethod {
 }
 
 class SipMethodHelper {
-  static String getName(SipMethod? method) {
+  static String getName(SIP_Method? method) {
     int period = method.toString().indexOf('.');
     return method.toString().substring(period + 1);
   }
 
-  static SipMethod? fromString(String? name) {
+  static SIP_Method? fromString(String? name) {
     if (name != null) {
       String cleanName = name.toUpperCase();
-      for (SipMethod method in SipMethod.values) {
+      for (SIP_Method method in SIP_Method.values) {
         if (getName(method) == cleanName) {
           return method;
         }
@@ -214,3 +215,68 @@ const String ACCEPTED_BODY_TYPES = 'application/sdp, application/dtmf-relay';
 const int MAX_FORWARDS = 69;
 const int SESSION_EXPIRES = 90;
 const int MIN_SESSION_EXPIRES = 60;
+
+
+enum SIP_SocketType {
+  WS,
+  TCP,
+  UDP,
+}
+
+enum SIP_Originator {
+  local,
+  remote,
+  system,
+}
+
+enum SIP_Direction {
+  outgoing,
+  incoming
+}
+
+enum SIP_DTMFMode {
+  INFO,     // DTMF signals are transmitted as SIP INFO messages, that is, separately from the media stream.
+  RTP,      // DTMF signals are transmitted inside an RTP media stream using the RFC 2833 protocol.
+}
+
+enum SIP_StateEnum {
+  CONNECTED,
+  DISCONNECTED,
+  RECONNECTING,
+  REGISTRATION_FAILED,
+  REGISTERED,
+  UNREGISTERED;
+
+  static of(String name) => values.firstWhere((e) => e.name == name);
+}
+
+typedef SIP_Sessions = Map<String, SIP_Session>;
+
+enum SIP_SessionStateEnum { 
+  CALL_INITIATION,
+  CONNECTING,
+  CONNECTED,
+  IN_CALL,
+  TERMINATED;
+}
+
+class SIP_StatusLine {
+  final int code;
+  final String reason;
+
+  SIP_StatusLine(this.code, this.reason);
+}
+
+enum SIP_AudioEnum {
+  speakerphone,
+  bluetooth,
+  earpiece;
+}
+
+class SIP_MediaStream {
+  final MediaStream stream;
+  final bool isMutedMic;
+  final bool isMutedVideo;
+
+  SIP_MediaStream(this.stream, this.isMutedMic, this.isMutedVideo);
+}

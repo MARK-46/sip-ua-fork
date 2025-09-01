@@ -52,5 +52,5 @@ class ParsedData {
   String? text;
   String? uuid;
 
-  SipMethod? get method => SipMethodHelper.fromString(method_str);
+  SIP_Method? get method => SipMethodHelper.fromString(method_str);
 }

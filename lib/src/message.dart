@@ -1,31 +1,30 @@
+import 'name_addr_header.dart';
 import 'constants.dart' as DartSIP_C;
 import 'constants.dart';
-import 'enums.dart';
 import 'event_manager/event_manager.dart';
 import 'event_manager/internal_events.dart';
 import 'exceptions.dart' as Exceptions;
 import 'logger.dart';
-import 'name_addr_header.dart';
 import 'request_sender.dart';
 import 'sip_message.dart';
-import 'ua.dart';
+import 'sip_client.dart';
 import 'uri.dart';
 import 'utils.dart' as Utils;
 
 class Message extends EventManager with Applicant {
-  Message(this._ua);
+  Message(this._client);
 
-  final UA _ua;
+  final SIP_Client _client;
   dynamic _request;
   bool _closed = false;
-  Direction? _direction;
+  SIP_Direction? _direction;
   NameAddrHeader? _local_identity;
   NameAddrHeader? _remote_identity;
   // Whether an incoming message has been replied.
   bool _is_replied = false;
   // Custom message empty object for high level use.
   final Map<String, dynamic> _data = <String, dynamic>{};
-  Direction? get direction => _direction;
+  SIP_Direction? get direction => _direction;
 
   NameAddrHeader? get local_identity => _local_identity;
 
@@ -43,7 +42,7 @@ class Message extends EventManager with Applicant {
     }
 
     // Check target validity.
-    URI? normalized = _ua.normalizeTarget(target);
+    URI? normalized = _client.normalizeTarget(target);
     if (normalized == null) {
       throw Exceptions.TypeError('Invalid target: $originalTarget');
     }
@@ -59,7 +58,7 @@ class Message extends EventManager with Applicant {
     extraHeaders.add('Content-Type: $contentType');
 
     _request = OutgoingRequest(
-        SipMethod.MESSAGE, normalized, _ua, params, extraHeaders);
+        SIP_Method.MESSAGE, normalized, _client, params, extraHeaders);
     if (body != null) {
       _request.body = body;
     }
@@ -75,9 +74,9 @@ class Message extends EventManager with Applicant {
       _receiveResponse(event.response);
     });
 
-    RequestSender request_sender = RequestSender(_ua, _request, handlers);
+    RequestSender request_sender = RequestSender(_client, _request, handlers);
 
-    _newMessage(Originator.local, _request);
+    _newMessage(SIP_Originator.local, _request);
 
     request_sender.send();
   }
@@ -85,7 +84,7 @@ class Message extends EventManager with Applicant {
   void init_incoming(IncomingRequest request) {
     _request = request;
 
-    _newMessage(Originator.remote, request);
+    _newMessage(SIP_Originator.remote, request);
 
     // Reply with a 200 OK if the user didn't reply.
     if (!_is_replied) {
@@ -104,7 +103,7 @@ class Message extends EventManager with Applicant {
     List<dynamic> extraHeaders = Utils.cloneArray(options['extraHeaders']);
     String? body = options['body'];
 
-    if (_direction != Direction.incoming) {
+    if (_direction != SIP_Direction.incoming) {
       throw Exceptions.NotSupportedError(
           '"accept" not supported for outgoing Message');
     }
@@ -127,7 +126,7 @@ class Message extends EventManager with Applicant {
     List<dynamic> extraHeaders = Utils.cloneArray(options['extraHeaders']);
     String? body = options['body'];
 
-    if (_direction != Direction.incoming) {
+    if (_direction != SIP_Direction.incoming) {
       throw Exceptions.NotSupportedError(
           '"reject" not supported for outgoing Message');
     }
@@ -152,11 +151,10 @@ class Message extends EventManager with Applicant {
       // Ignore provisional responses.
     } else if (RegExp(r'^2[0-9]{2}$')
         .hasMatch(response.status_code.toString())) {
-      _succeeded(Originator.remote, response);
+      _succeeded(SIP_Originator.remote, response);
     } else {
       String cause = Utils.sipErrorCause(response.status_code);
-      _failed(Originator.remote, response.status_code, cause,
-          response.reason_phrase);
+      _failed(SIP_Originator.remote, response.status_code, cause, response.reason_phrase);
     }
   }
 
@@ -164,56 +162,57 @@ class Message extends EventManager with Applicant {
     if (_closed) {
       return;
     }
-    _failed(Originator.system, 408, DartSIP_C.CausesType.REQUEST_TIMEOUT,
-        'Request Timeout');
+    _failed(
+        SIP_Originator.system, 408, DartSIP_C.CausesType.REQUEST_TIMEOUT, 'Request Timeout');
   }
 
   void _onTransportError() {
     if (_closed) {
       return;
     }
-    _failed(Originator.system, 500, DartSIP_C.CausesType.CONNECTION_ERROR,
-        'Transport Error');
+    _failed(SIP_Originator.system, 500, DartSIP_C.CausesType.CONNECTION_ERROR,
+        'SIP_SocketInterface Error');
   }
 
   @override
   void close() {
     _closed = true;
-    _ua.destroyMessage(this);
+    _client.destroyMessage(this);
   }
 
   /**
    * Internal Callbacks
    */
 
-  void _newMessage(Originator originator, dynamic request) {
-    if (originator == Originator.remote) {
-      _direction = Direction.incoming;
+  void _newMessage(SIP_Originator originator, dynamic request) {
+    if (originator == SIP_Originator.remote) {
+      _direction = SIP_Direction.incoming;
       _local_identity = request.to;
       _remote_identity = request.from;
-    } else if (originator == Originator.local) {
-      _direction = Direction.outgoing;
+    } else if (originator == SIP_Originator.local) {
+      _direction = SIP_Direction.outgoing;
       _local_identity = request.from;
       _remote_identity = request.to;
     }
 
-    _ua.newMessage(this, originator, request);
+    _client.newMessage(this, originator, request);
   }
 
-  void _failed(Originator originator, int? status_code, String cause,
-      String? reason_phrase) {
+  void _failed(SIP_Originator originator, int? status_code, String cause, String? reason_phrase) {
     logger.d('MESSAGE failed');
     close();
     logger.d('emit "failed"');
     emit(EventCallFailed(
-        originator: originator,
-        cause: ErrorCause(
-            cause: cause,
-            status_code: status_code,
-            reason_phrase: reason_phrase)));
+      originator: originator,
+      cause: ErrorCause(
+        cause: cause,
+        status_code: status_code,
+        reason_phrase: reason_phrase
+      )
+    ));
   }
 
-  void _succeeded(Originator originator, IncomingResponse? response) {
+  void _succeeded(SIP_Originator originator, IncomingResponse? response) {
     logger.d('MESSAGE succeeded');
 
     close();

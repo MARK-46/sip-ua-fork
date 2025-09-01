@@ -41,7 +41,7 @@ class DigestAuthentication {
   String? _opaque;
   bool? _stale;
   String? _qop;
-  late SipMethod _method;
+  late SIP_Method _method;
   dynamic _uri;
   String? _ha1;
   late String _response;
@@ -68,7 +68,7 @@ class DigestAuthentication {
 * received in a response to that request.
 * Returns true if auth was successfully generated, false otherwise.
 */
-  bool authenticate(SipMethod method, Challenge challenge,
+  bool authenticate(SIP_Method method, Challenge challenge,
       [dynamic ruri, String? cnonce, String? body]) {
     _algorithm = challenge.algorithm;
     _realm = challenge.realm;

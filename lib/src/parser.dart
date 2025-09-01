@@ -3,12 +3,12 @@ import 'dart:convert' show utf8;
 import 'grammar.dart';
 import 'logger.dart';
 import 'sip_message.dart';
-import 'ua.dart';
+import 'sip_client.dart';
 
 /**
  * Parse SIP Message
  */
-IncomingMessage? parseMessage(String data, UA? ua) {
+IncomingMessage? parseMessage(String data, SIP_Client? client) {
   IncomingMessage message;
   int bodyStart;
   int headerEnd = data.indexOf('\r\n');
@@ -34,7 +34,7 @@ IncomingMessage? parseMessage(String data, UA? ua) {
 
     return null;
   } else if (parsed.status_code == null) {
-    IncomingRequest incomingRequest = IncomingRequest(ua);
+    IncomingRequest incomingRequest = IncomingRequest(client);
     incomingRequest.method = parsed.method;
     incomingRequest.ruri = parsed.uri;
     message = incomingRequest;
@@ -80,20 +80,15 @@ IncomingMessage? parseMessage(String data, UA? ua) {
    * beyond the end of the body, they MUST be discarded.
    */
   if (message.hasHeader('content-length')) {
-    dynamic headerContentLength = message.getHeader('content-length');
+    dynamic contentLength = message.getHeader('content-length');
 
-    if (headerContentLength is String) {
-      headerContentLength = int.tryParse(headerContentLength) ?? 0;
+    if (contentLength is String) {
+      contentLength = int.tryParse(contentLength) ?? 0;
     }
-    headerContentLength ??= 0;
-
-    if (headerContentLength > 0) {
-      List<int> actualContent = utf8.encode(data.substring(bodyStart));
-      if (headerContentLength != actualContent.length)
-        logger.w(
-            '${message.method} received with content-length: $headerContentLength but actual length is: ${actualContent.length}');
-      List<int> encodedBody = utf8.encode(data.substring(bodyStart));
-      List<int> content = encodedBody.sublist(0, actualContent.length);
+    contentLength ??= 0;
+    if (contentLength > 0) {
+      List<int> encoded = utf8.encode(data.substring(bodyStart));
+      List<int> content = encoded.sublist(0, contentLength as int);
       message.body = utf8.decode(content);
     }
   } else {

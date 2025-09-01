@@ -1,5 +1,5 @@
-import '../constants.dart';
 import '../sip_message.dart';
+import '../constants.dart';
 import '../timers.dart';
 import 'invite_server.dart';
 import 'non_invite_server.dart';
@@ -71,7 +71,7 @@ class TransactionBag {
  */
 bool checkTransaction(TransactionBag transactions, IncomingRequest request) {
   switch (request.method) {
-    case SipMethod.INVITE:
+    case SIP_Method.INVITE:
       InviteServerTransaction? tr = transactions.getTransaction(
           InviteServerTransaction, request.via_branch!);
       if (tr != null) {
@@ -91,7 +91,7 @@ bool checkTransaction(TransactionBag transactions, IncomingRequest request) {
         return true;
       }
       break;
-    case SipMethod.ACK:
+    case SIP_Method.ACK:
       InviteServerTransaction? tr = transactions.getTransaction(
           InviteServerTransaction, request.via_branch!);
 
@@ -113,7 +113,7 @@ bool checkTransaction(TransactionBag transactions, IncomingRequest request) {
         return false;
       }
       break;
-    case SipMethod.CANCEL:
+    case SIP_Method.CANCEL:
       InviteServerTransaction? tr = transactions.getTransaction(
           InviteServerTransaction, request.via_branch!);
       if (tr != null) {

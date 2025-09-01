@@ -9,13 +9,13 @@ import 'transactions/ack_client.dart';
 import 'transactions/invite_client.dart';
 import 'transactions/non_invite_client.dart';
 import 'transactions/transaction_base.dart';
-import 'ua.dart';
+import 'sip_client.dart';
 
 // Default event handlers.
 
 class RequestSender {
-  RequestSender(UA ua, OutgoingRequest request, EventManager eventHandlers) {
-    _ua = ua;
+  RequestSender(SIP_Client client, OutgoingRequest request, EventManager eventHandlers) {
+    _client = client;
     _eventHandlers = eventHandlers;
     _method = request.method;
     _request = request;
@@ -23,15 +23,14 @@ class RequestSender {
     _challenged = false;
     _staled = false;
 
-    // If ua is in closing process or even closed just allow sending Bye and ACK.
-    if (ua.status == UAStatus.userClosed &&
-        (_method != SipMethod.BYE || _method != SipMethod.ACK)) {
+    // If client is in closing process or even closed just allow sending Bye and ACK.
+    if ((client.state != SIP_StateEnum.CONNECTED && client.state != SIP_StateEnum.REGISTERED)  && (_method != SIP_Method.BYE || _method != SIP_Method.ACK)) {
       _eventHandlers.emit(EventOnTransportError());
     }
   }
-  late UA _ua;
+  late SIP_Client _client;
   late EventManager _eventHandlers;
-  SipMethod? _method;
+  SIP_Method? _method;
   OutgoingRequest? _request;
   DigestAuthentication? _auth;
   late bool _challenged;
@@ -57,17 +56,17 @@ class RequestSender {
     });
 
     switch (_method) {
-      case SipMethod.INVITE:
-        clientTransaction = InviteClientTransaction(
-            _ua, _ua.socketTransport!, _request!, handlers);
+      case SIP_Method.INVITE:
+        clientTransaction =
+            InviteClientTransaction(_client, _client.transport!, _request!, handlers);
         break;
-      case SipMethod.ACK:
-        clientTransaction = AckClientTransaction(
-            _ua, _ua.socketTransport!, _request!, handlers);
+      case SIP_Method.ACK:
+        clientTransaction =
+            AckClientTransaction(_client, _client.transport!, _request!, handlers);
         break;
       default:
         clientTransaction = NonInviteClientTransaction(
-            _ua, _ua.socketTransport!, _request!, handlers);
+            _client, _client.transport!, _request!, handlers);
     }
 
     clientTransaction?.send();
@@ -87,7 +86,7 @@ class RequestSender {
     * Authenticate once. _challenged_ flag used to avoid infinite authentications.
     */
     if ((status_code == 401 || status_code == 407) &&
-        (_ua.configuration.password != null || _ua.configuration.ha1 != null)) {
+        (_client.configuration.password != null || _client.configuration.ha1 != null)) {
       // Get and parse the appropriate WWW-Authenticate or Proxy-Authenticate header.
       if (response.status_code == 401) {
         challenge = response.parseHeader('www-authenticate');
@@ -99,8 +98,7 @@ class RequestSender {
 
       // Verify it seems a valid challenge.
       if (challenge == null) {
-        logger.d(
-            '${response.status_code} with wrong or missing challenge, cannot authenticate');
+        logger.d('${response.status_code} with wrong or missing challenge, cannot authenticate');
         _eventHandlers.emit(EventOnReceiveResponse(response: response));
 
         return;
@@ -108,10 +106,10 @@ class RequestSender {
 
       if (!_challenged || (!_staled && challenge.stale == true)) {
         _auth ??= DigestAuthentication(Credentials.fromMap(<String, dynamic>{
-          'username': _ua.configuration.authorization_user,
-          'password': _ua.configuration.password,
-          'realm': _ua.configuration.realm,
-          'ha1': _ua.configuration.ha1
+          'username': _client.configuration.username,
+          'password': _client.configuration.password,
+          'realm': _client.configuration.realm,
+          'ha1': _client.configuration.ha1
         }));
 
         // Verify that the challenge is really valid.
@@ -131,9 +129,9 @@ class RequestSender {
         }
         _challenged = true;
 
-        // Update ha1 and realm in the UA.
-        _ua.set('realm', _auth!.get('realm'));
-        _ua.set('ha1', _auth!.get('ha1'));
+        // Update ha1 and realm in the SIP_Client.
+        _client.set('realm', _auth!.get('realm'));
+        _client.set('ha1', _auth!.get('ha1'));
 
         if (challenge.stale != null) {
           _staled = true;

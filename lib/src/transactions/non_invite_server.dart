@@ -1,18 +1,18 @@
 import 'dart:async';
 
-import 'package:sip_ua/src/sip_message.dart';
+import '../sip_message.dart';
+import '../transports/socket_interface.dart';
 import '../event_manager/internal_events.dart';
 import '../logger.dart';
-import '../socket_transport.dart';
 import '../timers.dart';
-import '../ua.dart';
+import '../sip_client.dart';
 import 'transaction_base.dart';
 
 class NonInviteServerTransaction extends TransactionBase {
   NonInviteServerTransaction(
-      UA ua, SocketTransport? transport, IncomingRequest request) {
+      SIP_Client client, SIP_SocketInterface? transport, IncomingRequest request) {
     id = request.via_branch;
-    this.ua = ua;
+    this.client = client;
     this.transport = transport;
     this.request = request;
     last_response = IncomingMessage();
@@ -20,7 +20,7 @@ class NonInviteServerTransaction extends TransactionBase {
 
     state = TransactionState.TRYING;
 
-    ua.newTransaction(this);
+    client.transactions.addTransaction(this);
   }
   bool? transportError;
   Timer? J;
@@ -33,7 +33,7 @@ class NonInviteServerTransaction extends TransactionBase {
   void timer_J() {
     logger.d('Timer J expired for transaction $id');
     stateChanged(TransactionState.TERMINATED);
-    ua.destroyTransaction(this);
+    client.transactions.removeTransaction(this);
   }
 
   @override
@@ -45,7 +45,7 @@ class NonInviteServerTransaction extends TransactionBase {
 
       clearTimeout(J);
       stateChanged(TransactionState.TERMINATED);
-      ua.destroyTransaction(this);
+      client.transactions.removeTransaction(this);
     }
   }
 

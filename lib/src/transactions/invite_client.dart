@@ -1,33 +1,33 @@
 import 'dart:async';
 
-import '../constants.dart';
 import '../event_manager/event_manager.dart';
+import '../transports/socket_interface.dart';
+import '../constants.dart';
 import '../event_manager/internal_events.dart';
 import '../logger.dart';
 import '../sip_message.dart';
-import '../socket_transport.dart';
 import '../timers.dart';
-import '../ua.dart';
+import '../sip_client.dart';
 import '../utils.dart';
 import 'transaction_base.dart';
 
 class InviteClientTransaction extends TransactionBase {
-  InviteClientTransaction(UA ua, SocketTransport transport,
-      OutgoingRequest request, EventManager eventHandlers) {
+  InviteClientTransaction(SIP_Client client, SIP_SocketInterface transport, OutgoingRequest request,
+      EventManager eventHandlers) {
     id = 'z9hG4bK${(Math.random() * 10000000).floor()}';
-    this.ua = ua;
+    this.client = client;
     this.transport = transport;
     this.request = request;
     _eventHandlers = eventHandlers;
     request.transaction = this;
 
-    String via = 'SIP/2.0/${transport.via_transport}';
+    String via = 'SIP/2.0/${transport.protocol.name}';
 
-    via += ' ${ua.configuration.via_host};branch=$id';
+    via += ' ${client.configuration.local_ip};branch=$id';
 
     this.request.setHeader('via', via);
 
-    this.ua.newTransaction(this);
+    this.client.transactions.addTransaction(this);
   }
   late EventManager _eventHandlers;
 
@@ -62,7 +62,7 @@ class InviteClientTransaction extends TransactionBase {
     }
 
     stateChanged(TransactionState.TERMINATED);
-    ua.destroyTransaction(this);
+    client.transactions.removeTransaction(this);
   }
 
   // RFC 6026 7.2.
@@ -72,7 +72,7 @@ class InviteClientTransaction extends TransactionBase {
     if (state == TransactionState.ACCEPTED) {
       clearTimeout(B);
       stateChanged(TransactionState.TERMINATED);
-      ua.destroyTransaction(this);
+      client.transactions.removeTransaction(this);
     }
   }
 
@@ -81,7 +81,7 @@ class InviteClientTransaction extends TransactionBase {
     logger.d('Timer B expired for transaction $id');
     if (state == TransactionState.CALLING) {
       stateChanged(TransactionState.TERMINATED);
-      ua.destroyTransaction(this);
+      client.transactions.removeTransaction(this);
       _eventHandlers.emit(EventOnRequestTimeout());
     }
   }
@@ -90,12 +90,12 @@ class InviteClientTransaction extends TransactionBase {
     logger.d('Timer D expired for transaction $id');
     clearTimeout(B);
     stateChanged(TransactionState.TERMINATED);
-    ua.destroyTransaction(this);
+    client.transactions.removeTransaction(this);
   }
 
   void sendACK(IncomingMessage response) {
     OutgoingRequest ack =
-        OutgoingRequest(SipMethod.ACK, request.ruri, ua, <String, dynamic>{
+        OutgoingRequest(SIP_Method.ACK, request.ruri, client, <String, dynamic>{
       'route_set': request.getHeaders('route'),
       'call_id': request.getHeader('call-id'),
       'cseq': request.cseq
@@ -119,7 +119,7 @@ class InviteClientTransaction extends TransactionBase {
     }
 
     OutgoingRequest cancel =
-        OutgoingRequest(SipMethod.CANCEL, request.ruri, ua, <String, dynamic>{
+        OutgoingRequest(SIP_Method.CANCEL, request.ruri, client, <String, dynamic>{
       'route_set': request.getHeaders('route'),
       'call_id': request.getHeader('call-id'),
       'cseq': request.cseq

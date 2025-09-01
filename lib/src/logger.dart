@@ -1,12 +1,13 @@
 import 'package:intl/intl.dart';
 import 'package:logger/logger.dart';
 
+import 'enum_helper.dart';
 import 'stack_trace_nj.dart';
 
 Logger logger = Log();
 
 class Log extends Logger {
-  Log() : super(printer: MyLogPrinter('.')) {
+  Log() : super(printer: MyLogPrinter()) {
     StackTraceNJ frames = StackTraceNJ();
 
     if (frames.frames != null) {
@@ -24,29 +25,26 @@ class Log extends Logger {
 }
 
 class MyLogPrinter extends LogPrinter {
-  MyLogPrinter(this.currentWorkingDirectory);
-
   static final Map<Level, AnsiColor> levelColors = <Level, AnsiColor>{
-    Level.trace: AnsiColor.fg(AnsiColor.grey(0.5)),
+    Level.verbose: AnsiColor.fg(AnsiColor.grey(0.5)),
     Level.debug: AnsiColor.none(),
     Level.info: AnsiColor.fg(12),
     Level.warning: AnsiColor.fg(208),
     Level.error: AnsiColor.fg(196),
+    Level.wtf: AnsiColor.fg(AnsiColor.grey(0.5)),
   };
 
   bool colors = true;
 
-  String currentWorkingDirectory;
-
   @override
   List<String> log(LogEvent event) {
-    if (Log._loggingLevel.index > event.level.index) {
+    if (EnumHelper.getIndexOf(Level.values, Log._loggingLevel) > EnumHelper.getIndexOf(Level.values, event.level)) {
       // don't log events where the log level is set higher
       return <String>[];
     }
-    DateFormat formatter = DateFormat('yyyy-MM-dd HH:mm:ss.');
+    DateFormat formatter = DateFormat('yyyy-MM-dd HH:mm:ss');
     DateTime now = DateTime.now();
-    String formattedDate = formatter.format(now) + now.millisecond.toString();
+    String formattedDate = formatter.format(now);
 
     AnsiColor color = _getLevelColor(event.level);
 
@@ -63,9 +61,13 @@ class MyLogPrinter extends LogPrinter {
         }
       }
     }
+    
+    if (event.level == Level.wtf) {
+      print(color('[$formattedDate] ${event.level.name.toUpperCase()} ::: ${event.message}'));
+    } else {
+      print(color('[$formattedDate] ${event.level.name.toUpperCase()} ${StackTraceNJ(skipFrames: depth).formatStackTrace(methodCount: 1)} ::: ${event.message}'));
+    }
 
-    print(color(
-        '[$formattedDate] ${event.level} ${StackTraceNJ(skipFrames: depth).formatStackTrace(methodCount: 1)} ::: ${event.message}'));
     if (event.error != null) {
       print('${event.error}');
     }
@@ -128,7 +130,7 @@ class AnsiColor {
 
   String call(String msg) {
     if (color) {
-      return '$msg$ansiDefault';
+      return '$this$msg$ansiDefault';
     } else {
       return msg;
     }

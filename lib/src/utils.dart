@@ -1,14 +1,19 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:core';
+import 'dart:io';
 import 'dart:math' as DartMath;
 
 import 'package:crypto/crypto.dart';
-import 'package:random_string/random_string.dart';
+import 'package:flutter_webrtc/flutter_webrtc.dart';
+import 'package:sip_fork/src/logger.dart';
 import 'package:uuid/uuid.dart';
 
 import 'constants.dart' as DartSIP_C;
-import 'grammar.dart';
 import 'uri.dart';
+
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 
 final JsonDecoder decoder = JsonDecoder();
 final JsonEncoder encoder = JsonEncoder();
@@ -49,24 +54,19 @@ bool isDecimal(dynamic input) =>
                 int.tryParse(input, radix: 10) != null)));
 
 // Used by 'newTag'.
-String createRandomToken(int size, {int base = 32}) {
-  return randomAlphaNumeric(size).toLowerCase();
+String createRandomToken(int size) {
+  final random = DartMath.Random.secure();
+  final buffer = StringBuffer();
+  const chars = '0123456789abcdef';
+  for (int i = 0; i < size; i++) {
+    buffer.write(chars[random.nextInt(16)]);
+  }
+  return buffer.toString();
 }
 
 String newTag() => createRandomToken(10);
 
 String newUUID() => Uuid().v4();
-
-dynamic hostType(String host) {
-  if (host == null) {
-    return null;
-  } else {
-    dynamic res = Grammar.parse(host, 'host');
-    if (res != -1) {
-      return res['host_type'];
-    }
-  }
-}
 
 /**
 * Hex-escape a SIP URI user.
@@ -182,4 +182,63 @@ String calculateMD5(String string) {
 
 List<dynamic> cloneArray(List<dynamic>? array) {
   return (array != null) ? array.sublist(0) : <dynamic>[];
+}
+
+Future<String> getLocalIpAddress() async {
+  if (kIsWeb) {
+    // On web we can't access local network interfaces directly
+    // Only possible via WebRTC trick or external service
+    return _getWebLocalIp();
+  } else {
+    return _getNativeLocalIp();
+  }
+}
+
+Future<String> _getNativeLocalIp() async {
+  try {
+    final interfaces = await NetworkInterface.list(
+      type: InternetAddressType.IPv4,
+      includeLoopback: false,
+      includeLinkLocal: false,
+    );
+
+    for (final interface in interfaces) {
+      for (final addr in interface.addresses) {
+        if (!addr.isLoopback &&
+            addr.type == InternetAddressType.IPv4) {
+          return addr.address;
+        }
+      }
+    }
+    return '';
+  } catch (e) {
+    return '';
+  }
+}
+
+Future<String> _getWebLocalIp() async {
+  final pc = await createPeerConnection({});
+  final completer = Completer<String>();
+
+  pc.onIceCandidate = (RTCIceCandidate candidate) {
+    if (candidate.candidate != null) {
+      final ipRegex = RegExp(r'(\d{1,3}(\.\d{1,3}){3})');
+      final match = ipRegex.firstMatch(candidate.candidate!);
+      if (match != null && !completer.isCompleted) {
+        completer.complete(match.group(0)!);
+        pc.close();
+      }
+    }
+  };
+
+  // create dummy data channel (label + init)
+  pc.createDataChannel("dummy", RTCDataChannelInit());
+
+  final offer = await pc.createOffer();
+  await pc.setLocalDescription(offer);
+
+  return completer.future.timeout(
+    const Duration(seconds: 5),
+    onTimeout: () => '',
+  );
 }

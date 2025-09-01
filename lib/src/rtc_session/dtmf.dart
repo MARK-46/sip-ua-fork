@@ -1,12 +1,12 @@
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 
-import '../../sip_ua.dart';
 import '../constants.dart';
 import '../event_manager/event_manager.dart';
 import '../event_manager/internal_events.dart';
 import '../exceptions.dart' as Exceptions;
 import '../logger.dart';
-import '../rtc_session.dart';
+import '../rtc_session.dart' as rtc;
+import '../sip_message.dart';
 import '../utils.dart' as Utils;
 
 class C {
@@ -18,43 +18,40 @@ class C {
 }
 
 class DTMF extends EventManager {
-  DTMF(this._session, {DtmfMode mode = DtmfMode.INFO}) {
+  DTMF(this._session, {SIP_DTMFMode mode = SIP_DTMFMode.INFO}) {
     _mode = mode;
   }
 
-  final RTCSession _session;
-  DtmfMode? _mode;
-  Direction? _direction;
+  final rtc.RTCSession _session;
+  SIP_DTMFMode? _mode;
+  SIP_Direction? _direction;
   String? _tone;
   int? _duration;
   int? _interToneGap;
   IncomingRequest? _request;
-  late EventManager _eventHandlers;
 
   String? get tone => _tone;
 
   int? get duration => _duration;
 
-  Direction? get direction => _direction;
+  SIP_Direction? get direction => _direction;
 
   void send(String tone, Map<String, dynamic> options) {
     if (tone == null) {
       throw Exceptions.TypeError('Not enough arguments');
     }
 
-    _direction = Direction.outgoing;
+    _direction = SIP_Direction.outgoing;
 
     // Check RTCSession Status.
-    if (_session.state != RtcSessionState.confirmed &&
-        _session.state != RtcSessionState.waitingForAck) {
+    if (_session.status != rtc.C.STATUS_CONFIRMED &&
+        _session.status != rtc.C.STATUS_WAITING_FOR_ACK) {
       throw Exceptions.InvalidStateError(_session.status);
     }
 
     List<dynamic> extraHeaders = options['extraHeaders'] != null
         ? Utils.cloneArray(options['extraHeaders'])
         : <dynamic>[];
-
-    _eventHandlers = options['eventHandlers'] ?? EventManager();
 
     // Check tone value.
     if (!tone.contains(RegExp(r'^[0-9A-DR#*]$'))) {
@@ -67,29 +64,25 @@ class DTMF extends EventManager {
     _duration = options['duration'];
     _interToneGap = options['interToneGap'];
 
-    if (_mode == DtmfMode.RFC2833) {
-      RTCDTMFSender? dtmfSender = _session.dtmfSender;
-      dtmfSender?.insertDTMF(_tone!,
+    if (_mode == SIP_DTMFMode.RTP) {
+      RTCDTMFSender dtmfSender = _session.dtmfSender;
+      dtmfSender.insertDTMF(_tone!,
           duration: _duration!, interToneGap: _interToneGap!);
-    } else if (_mode == DtmfMode.INFO) {
+    } else if (_mode == SIP_DTMFMode.INFO) {
       extraHeaders.add('Content-Type: application/dtmf-relay');
 
       String body = 'Signal=$_tone\r\n';
 
       body += 'Duration=$_duration';
 
-      _session.newDTMF(Originator.local, this, _request);
+      _session.newDTMF(SIP_Originator.local, this, _request);
 
       EventManager handlers = EventManager();
       handlers.on(EventOnSuccessResponse(), (EventOnSuccessResponse event) {
-        emit(EventSucceeded(
-            originator: Originator.remote, response: event.response));
+        emit(EventSucceeded(originator: SIP_Originator.remote, response: event.response));
       });
       handlers.on(EventOnErrorResponse(), (EventOnErrorResponse event) {
-        _eventHandlers.emit(EventOnFialed());
-        emit(EventOnFialed());
-        emit(EventCallFailed(
-            originator: Originator.remote, response: event.response));
+        emit(EventCallFailed(originator: SIP_Originator.remote, response: event.response));
       });
       handlers.on(EventOnRequestTimeout(), (EventOnRequestTimeout event) {
         _session.onRequestTimeout();
@@ -102,7 +95,7 @@ class DTMF extends EventManager {
         _session.onDialogError();
       });
 
-      _session.sendRequest(SipMethod.INFO, <String, dynamic>{
+      _session.sendRequest(SIP_Method.INFO, <String, dynamic>{
         'extraHeaders': extraHeaders,
         'eventHandlers': handlers,
         'body': body
@@ -114,7 +107,7 @@ class DTMF extends EventManager {
     String reg_tone = r'^(Signal\s*?=\s*?)([0-9A-D#*]{1})(\s)?.*';
     String reg_duration = r'^(Duration\s?=\s?)([0-9]{1,4})(\s)?.*';
 
-    _direction = Direction.incoming;
+    _direction = SIP_Direction.incoming;
     _request = request;
 
     request.reply(200);
@@ -122,7 +115,7 @@ class DTMF extends EventManager {
     if (request.body != null) {
       List<String> body = request.body!.split('\n');
 
-      if (body.isNotEmpty) {
+      if (body.length >= 1) {
         if (body[0].contains(RegExp(reg_tone))) {
           _tone = body[0].replaceAll(reg_tone, '\$2');
         }
@@ -140,7 +133,7 @@ class DTMF extends EventManager {
     if (_tone == null) {
       logger.d('invalid INFO DTMF received, discarded');
     } else {
-      _session.newDTMF(Originator.remote, this, request);
+      _session.newDTMF(SIP_Originator.remote, this, request);
     }
   }
 }

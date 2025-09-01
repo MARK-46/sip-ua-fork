@@ -1,5 +1,6 @@
+import 'package:parser_error/parser_error.dart';
+
 import 'grammar_parser.dart';
-import 'parser_error.dart';
 
 class Grammar {
   static dynamic parse(String input, String startRule) {
@@ -9,15 +10,12 @@ class Grammar {
       result = parser.parse(input, startRule);
       List<ParserErrorMessage> messages = <ParserErrorMessage>[];
       for (GrammarParserError error in parser.errors()) {
-        messages.add(
-            ParserErrorMessage(error.message, error.start, error.position));
+        messages.add(ParserErrorMessage(error.message, error.start, error.position));
       }
-
-      List<String> strings = ParserErrorFormatter.format(parser.text, messages);
-      print('input => $input, rule => $startRule');
-      print(strings.join('\n'));
+      ParserErrorFormatter.format(parser.text, messages);
       throw FormatException();
     }
+    // logger.wtf('Grammar.parse # $input - $startRule = $result');
     return result;
   }
 }

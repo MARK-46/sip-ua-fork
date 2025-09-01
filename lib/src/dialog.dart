@@ -4,10 +4,9 @@ import 'event_manager/event_manager.dart';
 import 'event_manager/internal_events.dart';
 import 'exceptions.dart' as Exceptions;
 import 'logger.dart';
-import 'rtc_session.dart';
 import 'sip_message.dart';
 import 'transactions/transaction_base.dart';
-import 'ua.dart';
+import 'sip_client.dart';
 import 'uri.dart';
 import 'utils.dart' as Utils;
 
@@ -39,7 +38,7 @@ class Dialog {
   Dialog(this._owner, dynamic message, String type, [int? state]) {
     state = state ?? DialogStatus.STATUS_CONFIRMED;
 
-    _ua = _owner.ua;
+    _client = _owner.client;
 
     if (!message.hasHeader('contact')) {
       throw Exceptions.TypeError(
@@ -86,13 +85,12 @@ class Dialog {
       _ack_seqnum = null;
     }
 
-    _ua.newDialog(this);
-    logger.d(
-        '$type dialog created with status ${_state == DialogStatus.STATUS_EARLY ? 'EARLY' : 'CONFIRMED'}');
+    _client.newDialog(this);
+    logger.d('$type dialog created with status ${_state == DialogStatus.STATUS_EARLY ? 'EARLY' : 'CONFIRMED'}');
   }
 
   final Owner _owner;
-  late UA _ua;
+  late SIP_Client _client;
   bool uac_pending_reply = false;
   bool uas_pending_reply = false;
   int? _state;
@@ -105,7 +103,7 @@ class Dialog {
   Id? _id;
   num? local_seqnum;
 
-  UA get ua => _ua;
+  SIP_Client get client => _client;
   Id? get id => _id;
 
   Owner? get owner => _owner;
@@ -123,16 +121,13 @@ class Dialog {
 
   void terminate() {
     logger.d('dialog ${_id.toString()} deleted');
-    _ua.destroyDialog(this);
+    _client.destroyDialog(this);
   }
 
-  OutgoingRequest sendRequest(SipMethod method, Map<String, dynamic>? options) {
+  OutgoingRequest sendRequest(SIP_Method method, Map<String, dynamic>? options) {
     options = options ?? <String, dynamic>{};
-    List<dynamic> extraHeaders = options['extraHeaders'] != null
-        ? Utils.cloneArray(options['extraHeaders'])
-        : <dynamic>[];
-    EventManager eventHandlers =
-        options['eventHandlers'] as EventManager? ?? EventManager();
+    List<dynamic> extraHeaders = options['extraHeaders'] != null ? Utils.cloneArray(options['extraHeaders']) : <dynamic>[];
+    EventManager eventHandlers = options['eventHandlers'] as EventManager? ?? EventManager();
     String? body = options['body'] ?? null;
     OutgoingRequest request = _createRequest(method, extraHeaders, body);
 
@@ -141,9 +136,7 @@ class Dialog {
       local_seqnum = local_seqnum! + 1;
     });
 
-    DialogRequestSender request_sender =
-        DialogRequestSender(this, request, eventHandlers);
-
+    DialogRequestSender request_sender = DialogRequestSender(this, request, eventHandlers);
     request_sender.send();
 
     // Return the instance of OutgoingRequest.
@@ -157,11 +150,11 @@ class Dialog {
     }
 
     // ACK received. Cleanup _ack_seqnum.
-    if (request.method == SipMethod.ACK && _ack_seqnum != null) {
+    if (request.method == SIP_Method.ACK && _ack_seqnum != null) {
       _ack_seqnum = null;
     }
     // INVITE received. Set _ack_seqnum.
-    else if (request.method == SipMethod.INVITE) {
+    else if (request.method == SIP_Method.INVITE) {
       _ack_seqnum = request.cseq;
     }
 
@@ -170,19 +163,19 @@ class Dialog {
 
   // RFC 3261 12.2.1.1.
   OutgoingRequest _createRequest(
-      SipMethod method, List<dynamic> extraHeaders, String? body) {
+      SIP_Method method, List<dynamic> extraHeaders, String? body) {
     extraHeaders = Utils.cloneArray(extraHeaders);
 
     local_seqnum ??= (Utils.Math.randomDouble() * 10000).floor();
 
-    num? cseq = (method == SipMethod.CANCEL || method == SipMethod.ACK)
+    num? cseq = (method == SIP_Method.CANCEL || method == SIP_Method.ACK)
         ? local_seqnum
         : local_seqnum = local_seqnum! + 1;
 
     OutgoingRequest request = OutgoingRequest(
         method,
         _remote_target,
-        _ua,
+        _client,
         <String, dynamic>{
           'cseq': cseq,
           'call_id': _id!.call_id,
@@ -203,7 +196,7 @@ class Dialog {
     if (_remote_seqnum == null) {
       _remote_seqnum = request.cseq;
     } else if (request.cseq! < _remote_seqnum!) {
-      if (request.method == SipMethod.ACK) {
+      if (request.method == SIP_Method.ACK) {
         // We are not expecting any ACK with lower seqnum than the current one.
         // Or this is not the ACK we are waiting for.
         if (_ack_seqnum == null || request.cseq != _ack_seqnum) {
@@ -219,8 +212,8 @@ class Dialog {
     }
     EventManager? eventHandlers = request.server_transaction;
     // RFC3261 14.2 Modifying an Existing Session -UAS BEHAVIOR-.
-    if (request.method == SipMethod.INVITE ||
-        (request.method == SipMethod.UPDATE && request.body != null)) {
+    if (request.method == SIP_Method.INVITE ||
+        (request.method == SIP_Method.UPDATE && request.body != null)) {
       if (uac_pending_reply == true) {
         request.reply(491);
       } else if (uas_pending_reply == true) {
@@ -250,7 +243,7 @@ class Dialog {
           }
         });
       }
-    } else if (request.method == SipMethod.NOTIFY) {
+    } else if (request.method == SIP_Method.NOTIFY) {
       // RFC6665 3.2 Replace the dialog's remote target URI if the request is accepted.
       if (request.hasHeader('contact')) {
         eventHandlers!.on(EventStateChanged(), (EventStateChanged state) {
@@ -268,5 +261,5 @@ abstract class Owner {
   Function(IncomingRequest) get receiveRequest;
   int get status;
   int get TerminatedCode;
-  UA get ua;
+  SIP_Client get client;
 }

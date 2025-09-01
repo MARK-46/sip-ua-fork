@@ -89,7 +89,7 @@ class NameAddrHeader {
 
   @override
   String toString() {
-    String body = (_display_name != null && _display_name!.isNotEmpty)
+    String body = (_display_name != null && _display_name!.length > 0)
         ? '"${_quote(_display_name!)}" '
         : '';
 

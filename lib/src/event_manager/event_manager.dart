@@ -1,13 +1,10 @@
 import '../logger.dart';
-import 'events.dart';
 
-export 'call_events.dart';
 export 'events.dart';
-export 'message_events.dart';
-export 'options_events.dart';
-export 'refer_events.dart';
-export 'register_events.dart';
-export 'transport_events.dart';
+
+abstract class EventType {
+  void sanityCheck() {}
+}
 
 /// This class serves as a Typed event bus.
 ///
@@ -69,7 +66,7 @@ class EventManager {
       targets.remove(listener);
       targets.add(listener);
     } catch (e, s) {
-      logger.e(e.toString(), error: e, stackTrace: s);
+      logger.e(e.toString(), stackTrace: s);
     }
   }
 
@@ -82,8 +79,7 @@ class EventManager {
     });
   }
 
-  void remove<T extends EventType>(
-      T eventType, void Function(T event)? listener) {
+  void remove<T extends EventType>(T eventType, void Function(T event)? listener) {
     List<dynamic>? targets = listeners[eventType.runtimeType];
     if (targets == null) {
       return;
@@ -108,7 +104,7 @@ class EventManager {
           //   logger.w("invoking $event on $target");
           target(event);
         } catch (e, s) {
-          logger.e(e.toString(), error: e, stackTrace: s);
+          logger.e(e.toString(), stackTrace: s);
         }
       }
     }

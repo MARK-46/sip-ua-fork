@@ -1,113 +1,205 @@
-# dart-sip-ua
+# sip\_fork
 
-[![Financial Contributors on Open Collective](https://opencollective.com/flutter-webrtc/all/badge.svg?label=financial+contributors)](https://opencollective.com/flutter-webrtc) [![pub package](https://img.shields.io/pub/v/sip_ua.svg)](https://pub.dartlang.org/packages/sip_ua)  [![slack](https://img.shields.io/badge/join-us%20on%20slack-gray.svg?longCache=true&logo=slack&colorB=brightgreen)](https://join.slack.com/t/flutterwebrtc/shared_invite/zt-q83o7y1s-FExGLWEvtkPKM8ku_F8cEQ)
- 
-A dart-lang version of the SIP UA stack, ported from [JsSIP](https://github.com/versatica/JsSIP).
+SIP client library for Flutter (Dart) — lightweight wrapper for WebSocket/SIP signaling, session management, and basic media control.
 
-## Overview
-- Use pure [dart-lang](https://dart.dev)
-- SIP over WebSocket && TCP (use real SIP in your flutter mobile, [desktop](https://flutter.dev/desktop), [web](https://flutter.dev/web) apps)
-- Audio/video calls ([flutter-webrtc](https://github.com/cloudwebrtc/flutter-webrtc)) and instant messaging
-- Support with standard SIP servers such as OpenSIPS, Kamailio, Asterisk, 3CX and FreeSWITCH.
-- Support RFC2833 or INFO to send DTMF.
+## Status
 
-## Currently supported platforms
-- [X] iOS
-- [X] Android
-- [X] Web
-- [X] macOS
-- [X] Windows
-- [X] Linux
-- [ ] Fuchsia
+> **Warning:** Experimental — not production-ready.
+>
+> This library is currently in **alpha** and under active development. Expect bugs, incomplete features, and breaking changes. Use at your own risk.
 
-## Install
 
-### Android
+## Key features
 
-- Proguard rules:
+* Persistent SIP connection over WebSocket.
+* Registration and reconnection state handling.
+* Incoming/outgoing call sessions with lifecycle events.
+* Session-level media controls: mic, video, hold, audio routing.
+* ICE servers configuration (STUN/TURN).
 
-```
--keep class io.flutter.app.** { *; }
--keep class io.flutter.plugin.**  { *; }
--keep class io.flutter.util.**  { *; }
--keep class io.flutter.view.**  { *; }
--keep class io.flutter.**  { *; }
--keep class io.flutter.plugins.**  { *; }
+## Installation
 
--keep class com.cloudwebrtc.webrtc.** {*;}
--keep class org.webrtc.** {*;}
+Add to your `pubspec.yaml`:
+
+```yaml
+dependencies:
+  sip_fork: 
+    git:
+        url: https://github.com/MARK-46/sip-ua-fork.git
 ```
 
-## Quickstart
+## Quick example
 
-Run example:
+```dart
+import 'package:sip_fork/sip_fork.dart' show 
+  SIP_Client, SIP_Session,
+  SIP_Settings, SIP_StateEnum, SIP_MediaStream, SIP_SocketType, SIP_StatusLine, SIP_AudioEnum;
 
-- [dart-sip-ua-example](https://github.com/flutter-webrtc/dart-sip-ua/blob/master/example/README.md)
-- or add your example.
+void example() async {
+  // Create settings (async factory)
+  SIP_Settings settings = await SIP_Settings.create(
+    socket_type: SIP_SocketType.WS,
+    socket_uri: 'ws://123.45.67.89:8080/ws',
+    sip_uri: 'sip:mark-1@123.45.67.89:5060',
+    display_name: 'MARK-46',
+    password: 'your_password_here',
+    ice_servers: [
+      {'url': 'stun:stun.l.google.com:19302'},
+      {'url': 'stun:stun4.l.google.com:19302'},
+      {'url': 'stun:stun.sipnet.ru:3478'},
+      {'url': 'stun:stun.pjsip.org:3478'},
+      // TURN example:
+      // {
+      //   'url': 'turn:123.45.67.89:3478',
+      //   'username': 'turn_user',
+      //   'credential': 'turn_secret'
+      // },
+    ],
+  );
 
-Register with SIP server:
+  // Create client
+  SIP_Client client = SIP_Client(settings);
 
-- [Asterisk](https://github.com/flutter-webrtc/dockers/tree/main/asterisk)
-- FreeSWITCH
-- OpenSIPS
-- 3CX
-- Kamailio
-- or add your server example.
+  // Connection state events
+  client.on('sip.state', (SIP_StateEnum state, SIP_StatusLine status) {
+    // state values: CONNECTED, DISCONNECTED, RECONNECTING,
+    // REGISTRATION_FAILED, REGISTERED, UNREGISTERED
+  });
 
-## FAQ's OR ISSUES
-<details>
+  // Session events
+  client.on('sip.session.incoming', (SIP_Session session) {
+    // session.answer();
+    // session.hangup();
+    // session.setMicEnabled(false);
+    // session.setVideoEnabled(false);
+    // session.setHoldEnabled(true);
+    // session.setAudioState(SIP_AudioEnum.speakerphone);
+  });
+  client.on('sip.session.outgoing',    (SIP_Session session) { });
+  client.on('sip.session.connecting',  (SIP_Session session) { });
+  client.on('sip.session.progress',    (SIP_Session session) { });
+  client.on('sip.session.confirmed',   (SIP_Session session) { });
+  client.on('sip.session.hold',        (SIP_Session session) { });
+  client.on('sip.session.unhold',      (SIP_Session session) { });
+  client.on('sip.session.stream',      (SIP_Session session, SIP_MediaStream stream) {
+    // handle local/remote media stream
+  });
+  client.on('sip.session.terminated',  (SIP_Session session, SIP_StatusLine status) { });
 
-<summary>expand</summary>
+  // Connect to SIP server
+  client.connect();
 
-## Server not configured for DTLS/SRTP
+  // Example control methods (by session target)
+  // client.call('mark-2');
+  // client.answer('mark-2');
+  // client.hangup('mark-2');
 
-WEBRTC_SET_REMOTE_DESCRIPTION_ERROR: Failed to set remote offer sdp: Called with SDP without DTLS fingerprint.
+  // client.setMicEnabled('mark-2', false);
+  // client.setVideoEnabled('mark-2', false);
+  // client.setHoldEnabled('mark-2', true);
 
-Your server is not sending a DTLS fingerprint inside the SDP when inviting the sip_ua client to start a call.
+  // client.setAudioState('mark-2', SIP_AudioEnum.speakerphone);
+  // client.setAudioState('mark-2', SIP_AudioEnum.bluetooth);
+  // client.setAudioState('mark-2', SIP_AudioEnum.earpiece);
+}
+```
 
-WebRTC uses encryption by Default, all WebRTC communications (audio, video, and data) are encrypted using DTLS and SRTP, ensuring secure communication. Your PBX must be configured to use DTLS/SRTP when calling sip_ua.
+## Configuration (`SIP_Settings.create`)
 
+* `socket_type` — connection transport (e.g., `SIP_SocketType.WS`).
+* `socket_uri` — WebSocket URL for SIP signaling (`ws://` or `wss://`).
+* `sip_uri` — user SIP URI (e.g., `sip:username@domain:port`).
+* `display_name` — display name for SIP registration.
+* `password` — authentication credential.
+* `ice_servers` — list of ICE server maps for NAT traversal. Each entry:
 
-## Why isn't there a UDP connection option?
+  * `url` (required), and optional `username`, `credential` for TURN.
 
-This package uses a WS or TCP connection for the signalling processs to initiate or terminate a session (sip messages).
-Once the session is connected WebRTC transmits the actual media (audio/video) over UDP.
+## Events
 
-If anyone actually still wants to use UDP for the signalling process, feel free to submit a PR with the large amount of work needed to set it up, packet order checking, error checking, reliability timeouts, flow control, security etc etc.
+Register handlers with `client.on(eventName, callback)`.
 
-## SIP/2.0 488 Not acceptable here
+Important event names and payloads:
 
-The codecs on your PBX server don't match the codecs used by WebRTC
+* `sip.state` ⇒ `(SIP_StateEnum state, SIP_StatusLine status)`
+* `sip.session.incoming` ⇒ `(SIP_Session session)`
+* `sip.session.outgoing` ⇒ `(SIP_Session session)`
+* `sip.session.connecting` ⇒ `(SIP_Session session)`
+* `sip.session.progress` ⇒ `(SIP_Session session)`
+* `sip.session.confirmed` ⇒ `(SIP_Session session)`
+* `sip.session.hold` ⇒ `(SIP_Session session)`
+* `sip.session.unhold` ⇒ `(SIP_Session session)`
+* `sip.session.stream` ⇒ `(SIP_Session session, SIP_MediaStream stream)`
+* `sip.session.terminated` ⇒ `(SIP_Session session, SIP_StatusLine status)`
 
-- **opus** (payload type 111, 48kHz, 2 channels)
-- **red** (payload type 63, 48kHz, 2 channels)
-- **G722** (payload type 9, 8kHz, 1 channel)
-- **ILBC** (payload type 102, 8kHz, 1 channel)
-- **PCMU** (payload type 0, 8kHz, 1 channel)
-- **PCMA** (payload type 8, 8kHz, 1 channel)
-- **CN** (payload type 13, 8kHz, 1 channel)
-- **telephone-event** (payload type 110, 48kHz, 1 channel for wideband, 8000Hz, 1 channel for narrowband)
+## API overview
 
-</details>
+Top-level classes:
 
+* `SIP_Client`
 
-## NOTE
-Thanks to the original authors of [JsSIP](https://github.com/versatica/JsSIP) for providing the JS version, which makes it possible to port the [dart-lang](https://dart.dev).
-- [José Luis Millán](https://github.com/jmillan)
-- [Iñaki Baz Castillo](https://github.com/ibc)
-- [Saúl Ibarra Corretgé](https://github.com/saghul)
+  * Properties:
 
-## Sponsors
-The first version was sponsored by Suretec Systems Ltd. T/A [SureVoIP](https://www.surevoip.co.uk).
+    * `state` — current `SIP_StateEnum`.
+    * `sessions` — active sessions collection.
+  * Methods:
+
+    * `connect()` — open connection and attempt registration.
+    * `disconnect()` — close connection.
+    * `call(target)` — place outgoing call.
+    * `answer(sessionIdOrTarget)` — answer incoming call.
+    * `hangup(sessionIdOrTarget)` — terminate call.
+    * `setMicEnabled(sessionIdOrTarget, bool)`
+    * `setVideoEnabled(sessionIdOrTarget, bool)`
+    * `setHoldEnabled(sessionIdOrTarget, bool)`
+    * `setAudioState(sessionIdOrTarget, SIP_AudioEnum)`
+
+* `SIP_Session`
+
+  * Methods:
+
+    * `answer()`, `hangup()`
+    * `setMicEnabled(bool)`, `setVideoEnabled(bool)`
+    * `setHoldEnabled(bool)`
+    * `setAudioState(SIP_AudioEnum)`
+
+* Enums / Types:
+
+  * `SIP_StateEnum` — `CONNECTED`, `DISCONNECTED`, `RECONNECTING`, `REGISTRATION_FAILED`, `REGISTERED`, `UNREGISTERED`.
+  * `SIP_SocketType` — e.g., `WS`.
+  * `SIP_AudioEnum` — audio routing modes: `speakerphone`, `bluetooth`, `earpiece`.
+  * `SIP_MediaStream` — media stream object provided on `sip.session.stream`.
+  * `SIP_StatusLine` — status information for state or termination callbacks.
+
+## Media and audio routing
+
+* Use `setMicEnabled` and `setVideoEnabled` on session instances to control local capture.
+* Use `setAudioState(..., SIP_AudioEnum.speakerphone|bluetooth|earpiece)` to choose output routing.
+* Handle `sip.session.stream` to attach remote/local media streams to your UI/audio pipeline.
+
+## ICE / NAT traversal
+
+* Provide STUN servers at minimum for basic connectivity.
+* TURN servers require `username` and `credential`.
+* Example ICE entry:
+
+  ```dart
+  {
+    'url': 'turn:turn.example.com:3478',
+    'username': 'turn_user',
+    'credential': 'turn_secret'
+  }
+  ```
+
+## Notes
+
+* The library expects a SIP-over-WebSocket gateway that supports the signaling used by this client.
+* Protect credentials. Use secure storage for passwords and TLS (`wss://`) when available.
+* Session identifiers used in control methods should match what the library exposes in `client.sessions` or callbacks.
 
 ## Contributing
-The project is inseparable from the contributors of the community.
-- [SureVoIP](https://github.com/SureVoIP) - Sponsor
-- [CloudWebRTC](https://github.com/cloudwebrtc) - Original Author
-- [Robert Sutton](https://github.com/rlsutton1) - Contributor
-- [Gavin Henry](https://github.com/ghenry) - Contributor
-- [Perondas](https://github.com/Perondas) - Contributor
-- [Mikael Wills](https://github.com/mikaelwills) - Contributor
+
+Pull requests and bug reports accepted. Include reproducible steps and example SIP server configuration when applicable.
 
 ## License
 dart-sip-ua is released under the [MIT license](https://github.com/cloudwebrtc/dart-sip-ua/blob/master/LICENSE).
